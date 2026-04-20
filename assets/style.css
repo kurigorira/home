@@ -191,14 +191,46 @@ button { font-family: inherit; }
     0 10px 24px -16px rgba(20, 18, 14, .18);
   overflow: hidden;
 }
-.photo__frame img {
+.photo__frame img,
+.photo__frame video {
   width: 100%;
-  height: auto;
+  height: 100%;
+  object-fit: cover;
   display: block;
   transition: transform 1.2s ease, filter .6s ease;
 }
-.photo:hover .photo__frame img {
+.photo:hover .photo__frame img,
+.photo:hover .photo__frame video {
   transform: scale(1.015);
+}
+
+.play-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: clamp(28px, 4vw, 44px);
+  text-shadow: 0 2px 12px rgba(0,0,0,.4);
+  pointer-events: none;
+  opacity: 0.9;
+  transition: transform .3s ease, opacity .3s ease;
+}
+.play-overlay::before {
+  content: "";
+  position: absolute;
+  width: clamp(56px, 7vw, 80px);
+  height: clamp(56px, 7vw, 80px);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: -1;
+}
+.photo--playable:hover .play-overlay {
+  transform: scale(1.08);
+  opacity: 1;
 }
 
 .photo__caption {
@@ -227,11 +259,24 @@ button { font-family: inherit; }
   display: flex;
   opacity: 1;
 }
-.lightbox__img {
+.lightbox__stage {
+  max-width: 100%;
+  max-height: 82vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lightbox__media {
   max-width: 100%;
   max-height: 82vh;
   object-fit: contain;
   box-shadow: 0 24px 80px -20px rgba(0,0,0,.6);
+  background: #000;
+}
+.lightbox__media--iframe {
+  width: min(92vw, 1280px);
+  height: min(82vh, calc(min(92vw, 1280px) * 9 / 16));
+  border: 0;
 }
 .lightbox__caption {
   position: absolute;
@@ -407,7 +452,31 @@ button { font-family: inherit; }
   overflow: hidden;
   position: relative;
 }
-.thumb img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+.thumb img,
+.thumb video { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+.thumb .play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 22px;
+  text-shadow: 0 2px 8px rgba(0,0,0,.4);
+  pointer-events: none;
+}
+.thumb .yt-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: rgba(0,0,0,.6);
+  color: #fff;
+  padding: 2px 6px;
+  pointer-events: none;
+}
 .thumb input.caption {
   width: 100%;
   border: 0;
@@ -479,3 +548,40 @@ button { font-family: inherit; }
 }
 
 .hidden { display: none !important; }
+
+.linklike {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--ink-soft);
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 3px;
+  cursor: pointer;
+  letter-spacing: 0.05em;
+}
+.linklike:hover { color: var(--ink); }
+
+details > summary { list-style: none; outline: none; user-select: none; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "＋ ";
+  color: var(--ink-faint);
+  font-weight: 300;
+}
+details[open] > summary::before { content: "− "; }
+
+.admin details {
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  padding: 14px 18px;
+  margin-top: 16px;
+}
+.admin details ol, .admin details p { margin: 0; }
+.admin code {
+  background: #f1ede5;
+  padding: 2px 6px;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}

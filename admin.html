@@ -56,32 +56,81 @@
     </div>
 
     <div class="field">
-      <label>写真</label>
+      <label>写真・動画</label>
       <div class="dropzone" id="dropzone">
-        ここに写真をドラッグ＆ドロップ<br>
-        <span style="font-size:12px; font-style:normal; letter-spacing:.2em; text-transform:uppercase; color:var(--ink-faint);">または クリックして選択</span>
+        ここに写真／動画をドラッグ＆ドロップ<br>
+        <span style="font-size:12px; font-style:normal; letter-spacing:.2em; text-transform:uppercase; color:var(--ink-faint);">または クリックして選択</span><br>
+        <span style="font-size:11px; font-style:normal; color:var(--ink-faint); letter-spacing:.05em;">HEIC は自動で JPG に変換・動画は MP4/WebM/MOV（480p 推奨・2 分以内・100MB 以下）</span>
+        <div class="status" id="convert-status" style="margin-top:8px;"></div>
       </div>
-      <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden>
+      <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif,video/mp4,video/webm,video/quicktime" multiple hidden>
+
+      <div style="display:flex; gap:8px; margin-top:12px;">
+        <input type="text" id="youtube-url" placeholder="または YouTube / Shorts の URL を貼り付け" style="flex:1;">
+        <button type="button" class="btn btn--ghost" id="youtube-add">追加</button>
+      </div>
+      <div class="status" id="youtube-error"></div>
+
       <div class="thumbs" id="thumbs"></div>
     </div>
 
+    <!-- Direct upload section -->
     <div class="admin__section">
-      <button class="btn" id="generate" disabled>ZIP を生成してダウンロード</button>
-      <div class="status" id="status"></div>
+      <label>アップロード方法</label>
 
-      <div class="steps">
-        <strong>生成後の手順</strong><br>
-        1. ダウンロードした ZIP を解凍<br>
-        2. 解凍した <code>photos/</code> と <code>data/</code> をリポジトリ直下に配置（上書き）<br>
-        3. <code>git add . && git commit -m "add event" && git push</code><br>
-        4. GitHub Pages に数十秒で反映されます
+      <!-- Primary: direct upload -->
+      <div id="upload-ready" class="hidden">
+        <button class="btn" id="upload-direct" disabled>GitHub に直接アップロード</button>
+        <div class="status" id="upload-status"></div>
+        <div style="margin-top:12px; font-size:11px; color:var(--ink-faint); letter-spacing:.05em;">
+          <button type="button" class="linklike" id="pat-reset">トークンを再設定</button>
+        </div>
       </div>
 
-      <p style="margin-top:32px;"><a href="index.html" style="font-size:12px; letter-spacing:.2em; text-transform:uppercase; color:var(--ink-faint); border-bottom:1px solid var(--line);">← ギャラリーへ戻る</a></p>
+      <!-- Setup: no PAT yet -->
+      <div id="pat-setup">
+        <p style="font-family:var(--serif); font-style:italic; color:var(--ink-soft); margin-top:0;">
+          初回だけ、GitHub の Personal Access Token を登録するとボタン一発で公開できます。
+        </p>
+        <details>
+          <summary style="cursor:pointer; font-size:13px; color:var(--ink-soft); letter-spacing:.1em;">トークンの取り方（クリックで展開）</summary>
+          <ol style="font-size:13px; color:var(--ink-soft); line-height:1.9; margin-top:12px;">
+            <li><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">GitHub のトークン発行ページ</a>を開く</li>
+            <li>Token name：<code>Family Album</code> など好きな名前</li>
+            <li>Expiration：長め推奨（1 年など）</li>
+            <li>Repository access：<code>Only select repositories</code> → <code>kurigorira/home</code> を選択</li>
+            <li>Repository permissions → <code>Contents</code> を <code>Read and write</code> に設定</li>
+            <li><strong>Generate token</strong> → 表示された <code>github_pat_...</code> をコピー</li>
+            <li>下の欄に貼り付けて「保存」</li>
+          </ol>
+        </details>
+        <div class="field" style="margin-top:20px;">
+          <input type="password" id="pat-input" placeholder="github_pat_... をここに貼り付け" autocomplete="off">
+        </div>
+        <button class="btn" id="pat-save">トークンを保存</button>
+        <div class="status" id="pat-error"></div>
+      </div>
+
+      <p style="margin-top:36px; font-size:11px; color:var(--ink-faint); letter-spacing:.2em; text-transform:uppercase;">または（手動アップ）</p>
+      <button class="btn btn--ghost" id="generate" disabled>ZIP をダウンロード</button>
+      <div class="status" id="status"></div>
+
+      <details style="margin-top:24px;">
+        <summary style="cursor:pointer; font-size:12px; color:var(--ink-faint); letter-spacing:.15em;">ZIP から手動アップする手順</summary>
+        <div class="steps">
+          1. ZIP を解凍<br>
+          2. リポジトリ直下（<code>photos/</code> や <code>data/</code> がある階層）で「Add file → Upload files」<br>
+          3. 解凍フォルダの中身（<code>photos</code> と <code>data</code>）をまとめてドラッグ&ドロップ<br>
+          <strong>注意：</strong>GitHub 上ですでに <code>photos/</code> に入った状態でドロップすると入れ子（<code>photos/photos/</code>）になります。必ずリポジトリ直下で行ってください。
+        </div>
+      </details>
+
+      <p style="margin-top:40px;"><a href="index.html" style="font-size:12px; letter-spacing:.2em; text-transform:uppercase; color:var(--ink-faint); border-bottom:1px solid var(--line);">← ギャラリーへ戻る</a></p>
     </div>
   </section>
 
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
   <script src="assets/admin.js"></script>
 </body>
 </html>
