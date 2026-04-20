@@ -99,13 +99,22 @@
 
   function photoEl(p, event, i) {
     const fig = document.createElement("figure");
-    fig.className = "photo";
+    fig.className = "photo" + (p.type === "video" || p.type === "youtube" ? " photo--playable" : "");
     fig.dataset.event = event.slug;
     fig.dataset.index = i;
     const aspect = (p.w && p.h) ? `aspect-ratio: ${p.w} / ${p.h};` : "";
+    let media;
+    if (p.type === "video") {
+      media = `<video src="${encodeURI(p.src)}" preload="metadata" muted playsinline></video><span class="play-overlay">▶</span>`;
+    } else if (p.type === "youtube") {
+      const thumb = `https://img.youtube.com/vi/${encodeURIComponent(p.videoId)}/hqdefault.jpg`;
+      media = `<img loading="lazy" src="${thumb}" alt="${escapeHtml(p.caption || event.title || "")}"><span class="play-overlay">▶</span>`;
+    } else {
+      media = `<img loading="lazy" src="${encodeURI(p.src)}" alt="${escapeHtml(p.caption || event.title || "")}">`;
+    }
     fig.innerHTML = `
       <div class="photo__frame" style="${aspect}">
-        <img loading="lazy" src="${encodeURI(p.src)}" alt="${escapeHtml(p.caption || event.title || "")}">
+        ${media}
       </div>
       ${p.caption ? `<figcaption class="photo__caption">${escapeHtml(p.caption)}</figcaption>` : ""}
     `;
@@ -131,7 +140,7 @@
 
   // ---------- Lightbox ----------
   const lb = {
-    el: null, img: null, cap: null,
+    el: null, stage: null, cap: null,
     current: null, list: [],
     open(list, idx) {
       this.list = list;
@@ -141,6 +150,7 @@
       document.body.style.overflow = "hidden";
     },
     close() {
+      this.clearStage();
       this.el.classList.remove("is-open");
       document.body.style.overflow = "";
     },
@@ -148,10 +158,33 @@
       this.current = (this.current + dir + this.list.length) % this.list.length;
       this.update();
     },
+    clearStage() {
+      this.stage.innerHTML = "";
+    },
     update() {
       const p = this.list[this.current];
-      this.img.src = encodeURI(p.src);
-      this.img.alt = p.caption || "";
+      this.clearStage();
+      let node;
+      if (p.type === "video") {
+        node = document.createElement("video");
+        node.src = encodeURI(p.src);
+        node.controls = true;
+        node.autoplay = true;
+        node.playsInline = true;
+        node.className = "lightbox__media";
+      } else if (p.type === "youtube") {
+        node = document.createElement("iframe");
+        node.src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(p.videoId)}?autoplay=1&rel=0`;
+        node.allow = "autoplay; encrypted-media; picture-in-picture";
+        node.allowFullscreen = true;
+        node.className = "lightbox__media lightbox__media--iframe";
+      } else {
+        node = document.createElement("img");
+        node.src = encodeURI(p.src);
+        node.alt = p.caption || "";
+        node.className = "lightbox__media";
+      }
+      this.stage.appendChild(node);
       this.cap.textContent = p.caption || "";
     }
   };
@@ -164,7 +197,7 @@
 
   function initLightbox() {
     lb.el = $("#lightbox");
-    lb.img = $("#lightbox-img");
+    lb.stage = $("#lightbox-stage");
     lb.cap = $("#lightbox-cap");
     $("#lightbox-close").addEventListener("click", () => lb.close());
     $("#lightbox-prev").addEventListener("click", (e) => { e.stopPropagation(); lb.next(-1); });

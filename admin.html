@@ -56,12 +56,21 @@
     </div>
 
     <div class="field">
-      <label>写真</label>
+      <label>写真・動画</label>
       <div class="dropzone" id="dropzone">
-        ここに写真をドラッグ＆ドロップ<br>
-        <span style="font-size:12px; font-style:normal; letter-spacing:.2em; text-transform:uppercase; color:var(--ink-faint);">または クリックして選択</span>
+        ここに写真／動画をドラッグ＆ドロップ<br>
+        <span style="font-size:12px; font-style:normal; letter-spacing:.2em; text-transform:uppercase; color:var(--ink-faint);">または クリックして選択</span><br>
+        <span style="font-size:11px; font-style:normal; color:var(--ink-faint); letter-spacing:.05em;">HEIC は自動で JPG に変換・動画は MP4/WebM/MOV（480p 推奨・2 分以内・100MB 以下）</span>
+        <div class="status" id="convert-status" style="margin-top:8px;"></div>
       </div>
-      <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden>
+      <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,.heic,.heif,video/mp4,video/webm,video/quicktime" multiple hidden>
+
+      <div style="display:flex; gap:8px; margin-top:12px;">
+        <input type="text" id="youtube-url" placeholder="または YouTube / Shorts の URL を貼り付け" style="flex:1;">
+        <button type="button" class="btn btn--ghost" id="youtube-add">追加</button>
+      </div>
+      <div class="status" id="youtube-error"></div>
+
       <div class="thumbs" id="thumbs"></div>
     </div>
 
@@ -121,6 +130,7 @@
   </section>
 
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
   <script src="assets/admin.js"></script>
 </body>
 </html>

@@ -116,29 +116,135 @@
       handleFiles(e.dataTransfer.files);
     });
     file.addEventListener("change", (e) => handleFiles(e.target.files));
+
+    $("#youtube-add").addEventListener("click", addYoutube);
+    $("#youtube-url").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addYoutube(); } });
   }
 
-  async function handleFiles(fileList) {
-    const files = [...fileList].filter(f => /^image\/(jpeg|png|webp|gif)$/.test(f.type));
-    for (const f of files) {
-      state.photos.push(await readPhoto(f));
-    }
+  function parseYouTubeId(input) {
+    if (!input) return null;
+    const s = input.trim();
+    // Raw ID (11 chars)
+    if (/^[\w-]{11}$/.test(s)) return s;
+    try {
+      const u = new URL(s);
+      const host = u.hostname.replace(/^www\./, "");
+      if (host === "youtu.be") return u.pathname.slice(1).split("/")[0] || null;
+      if (host.endsWith("youtube.com")) {
+        const v = u.searchParams.get("v");
+        if (v) return v;
+        const parts = u.pathname.split("/").filter(Boolean);
+        // /shorts/<id>, /embed/<id>, /v/<id>
+        if (["shorts", "embed", "v"].includes(parts[0]) && parts[1]) return parts[1];
+      }
+    } catch { /* not a URL */ }
+    return null;
+  }
+
+  function addYoutube() {
+    const input = $("#youtube-url");
+    const err = $("#youtube-error");
+    err.textContent = "";
+    const id = parseYouTubeId(input.value);
+    if (!id) { err.textContent = "YouTube の URL を認識できませんでした"; return; }
+    state.photos.push({
+      id: state.nextId++, type: "youtube",
+      videoId: id, caption: "",
+      w: 16, h: 9, // aspect ratio hint for masonry
+    });
+    input.value = "";
     renderThumbs();
     updateButtonsEnabled();
   }
 
+  const MAX_BYTES = 100 * 1024 * 1024;   // GitHub Pages per-file ceiling
+  const MAX_VIDEO_SECONDS = 130;         // 2 minutes + small buffer
+
+  function isImage(t) { return /^image\/(jpeg|png|webp|gif)$/.test(t); }
+  function isVideo(t) { return /^video\/(mp4|webm|quicktime|x-m4v)$/.test(t); }
+  function isHeic(f) {
+    return /^image\/hei[cf]$/i.test(f.type || "") ||
+           /\.(heic|heif)$/i.test(f.name || "");
+  }
+
+  function setConvertStatus(msg) {
+    const el = $("#convert-status");
+    if (el) el.textContent = msg;
+  }
+
+  async function convertHeic(file) {
+    if (typeof heic2any !== "function") throw new Error("HEIC 変換ライブラリが読み込めていません");
+    const blob = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.9 });
+    const out = Array.isArray(blob) ? blob[0] : blob;
+    const newName = file.name.replace(/\.(heic|heif)$/i, ".jpg");
+    return new File([out], newName, { type: "image/jpeg", lastModified: file.lastModified });
+  }
+
+  async function handleFiles(fileList) {
+    const rejected = [];
+    const all = [...fileList];
+    for (let i = 0; i < all.length; i++) {
+      let f = all[i];
+      try {
+        if (isHeic(f)) {
+          setConvertStatus(`HEIC を JPG に変換中… (${i + 1}/${all.length}) ${f.name}`);
+          f = await convertHeic(f);
+        }
+      } catch (e) {
+        rejected.push(`${f.name}: HEIC 変換に失敗 (${e.message || e})`);
+        continue;
+      }
+      if (!isImage(f.type) && !isVideo(f.type)) { rejected.push(`${f.name}: 対応していない形式`); continue; }
+      if (f.size > MAX_BYTES) { rejected.push(`${f.name}: ${(f.size / 1024 / 1024).toFixed(1)}MB は大きすぎます（100MB まで）`); continue; }
+      try {
+        const media = isVideo(f.type) ? await readVideo(f) : await readPhoto(f);
+        if (media.type === "video" && media.duration > MAX_VIDEO_SECONDS) {
+          URL.revokeObjectURL(media.url);
+          rejected.push(`${f.name}: ${Math.round(media.duration)}秒は長すぎます（2 分以内）`);
+          continue;
+        }
+        state.photos.push(media);
+      } catch (e) {
+        rejected.push(`${f.name}: ${e.message || "読み込みエラー"}`);
+      }
+    }
+    setConvertStatus("");
+    renderThumbs();
+    updateButtonsEnabled();
+    if (rejected.length) {
+      alert("以下のファイルは追加できませんでした:\n\n" + rejected.join("\n"));
+    }
+  }
+
   function readPhoto(file) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const url = URL.createObjectURL(file);
       const img = new Image();
-      img.onload = () => {
-        resolve({
-          id: state.nextId++,
-          file, url, caption: "",
-          w: img.naturalWidth, h: img.naturalHeight,
-        });
-      };
+      img.onload = () => resolve({
+        id: state.nextId++, type: "image",
+        file, url, caption: "",
+        w: img.naturalWidth, h: img.naturalHeight,
+      });
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("画像を読み込めません")); };
       img.src = url;
+    });
+  }
+
+  function readVideo(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const v = document.createElement("video");
+      v.preload = "metadata";
+      v.muted = true;
+      v.playsInline = true;
+      v.onloadedmetadata = () => resolve({
+        id: state.nextId++, type: "video",
+        file, url, caption: "",
+        w: v.videoWidth, h: v.videoHeight,
+        duration: v.duration || 0,
+      });
+      v.onerror = () => { URL.revokeObjectURL(url); reject(new Error("動画を読み込めません（形式がブラウザ非対応の可能性）")); };
+      v.src = url;
     });
   }
 
@@ -147,17 +253,26 @@
     wrap.innerHTML = "";
     state.photos.forEach((p, idx) => {
       const el = document.createElement("div");
-      el.className = "thumb";
+      el.className = "thumb" + (p.type === "video" ? " thumb--video" : "");
       el.draggable = true;
       el.dataset.id = p.id;
+      let media;
+      if (p.type === "video") {
+        media = `<video src="${p.url}" muted playsinline preload="metadata"></video><span class="play">▶</span>`;
+      } else if (p.type === "youtube") {
+        const thumb = `https://img.youtube.com/vi/${p.videoId}/mqdefault.jpg`;
+        media = `<img src="${thumb}" alt="YouTube"><span class="play">▶</span><span class="yt-badge">YouTube</span>`;
+      } else {
+        media = `<img src="${p.url}" alt="">`;
+      }
       el.innerHTML = `
         <button class="remove" title="削除" aria-label="削除">×</button>
-        <img src="${p.url}" alt="">
+        ${media}
         <input class="caption" placeholder="キャプション（任意）" value="${escapeAttr(p.caption)}">
       `;
       el.querySelector(".remove").addEventListener("click", (e) => {
         e.stopPropagation();
-        URL.revokeObjectURL(p.url);
+        if (p.url) URL.revokeObjectURL(p.url);
         state.photos.splice(idx, 1);
         renderThumbs();
         updateButtonsEnabled();
@@ -197,23 +312,29 @@
     if (state.photos.length === 0) return { error: "写真を追加してください" };
 
     const slug = computeSlug();
-    const photoEntries = state.photos.map((p, i) => {
-      const ext = extFromType(p.file.type) || extFromName(p.file.name) || "jpg";
-      const name = `${String(i + 1).padStart(2, "0")}.${ext}`;
-      return {
-        path: `photos/${slug}/${name}`,
-        file: p.file,
-        w: p.w, h: p.h,
-        caption: p.caption || ""
-      };
-    });
+    // Separate media kinds. Only file items need uploading; youtube items are URL-only.
+    let imgI = 0, vidI = 0;
+    const photoEntries = [];
+    const jsonItems = [];
+    for (const p of state.photos) {
+      if (p.type === "youtube") {
+        jsonItems.push({ type: "youtube", videoId: p.videoId, caption: p.caption || "" });
+        continue;
+      }
+      const ext = extFromType(p.file.type) || extFromName(p.file.name) || (p.type === "video" ? "mp4" : "jpg");
+      const idx = p.type === "video" ? ++vidI : ++imgI;
+      const prefix = p.type === "video" ? "vid" : "";
+      const name = `${prefix}${String(idx).padStart(2, "0")}.${ext}`;
+      const path = `photos/${slug}/${name}`;
+      photoEntries.push({ path, file: p.file });
+      const item = { type: p.type, src: path, w: p.w, h: p.h, caption: p.caption || "" };
+      if (p.type === "video" && p.duration) item.duration = Math.round(p.duration);
+      jsonItems.push(item);
+    }
 
     const next = JSON.parse(JSON.stringify(state.existing));
     next.events = (next.events || []).filter(e => e.slug !== slug);
-    next.events.push({
-      slug, title, date, description: desc,
-      photos: photoEntries.map(p => ({ src: p.path, w: p.w, h: p.h, caption: p.caption }))
-    });
+    next.events.push({ slug, title, date, description: desc, photos: jsonItems });
     next.events.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
 
     return { slug, title, photoEntries, eventsJson: JSON.stringify(next, null, 2) + "\n" };
@@ -401,7 +522,7 @@
 
       setUploadStatus(`✓ 公開しました。GitHub Pages 反映まで 1〜2 分程度: https://${REPO_OWNER}.github.io/${REPO_NAME}/`);
       // Clear form
-      state.photos.forEach(p => URL.revokeObjectURL(p.url));
+      state.photos.forEach(p => { if (p.url) URL.revokeObjectURL(p.url); });
       state.photos = [];
       renderThumbs();
       await loadExisting();
@@ -421,6 +542,9 @@
     if (type === "image/png")  return "png";
     if (type === "image/webp") return "webp";
     if (type === "image/gif")  return "gif";
+    if (type === "video/mp4")  return "mp4";
+    if (type === "video/webm") return "webm";
+    if (type === "video/quicktime" || type === "video/x-m4v") return "mov";
     return null;
   }
   function extFromName(name) {
