@@ -1,22 +1,28 @@
 (() => {
-  // SHA-256 hash of the admin password.
-  // Default password: "family"
-  // To change: compute a new hash with `echo -n "yournewpassword" | shasum -a 256`
-  // and replace the string below.
+  // ---- Config ----
+  // SHA-256 hash of the admin password. Default password: "family"
+  // To change: echo -n "newpw" | shasum -a 256
   const PASSWORD_HASH = "d34a569ab7aaa54dacd715ae64953455d86b768846cd0085ef4e9e7471489b7b";
 
+  // GitHub repo target for direct upload
+  const REPO_OWNER  = "kurigorira";
+  const REPO_NAME   = "home";
+  const REPO_BRANCH = "main";
+
   const DATA_URL = "data/events.json";
+  const PAT_KEY  = "family_album_pat";
 
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 
   const state = {
     existing: { site: { title: "家族のアルバム", subtitle: "Our Family Memories" }, events: [] },
-    photos: [], // { file, url, caption, w, h, id }
+    existingSha: null, // blob sha of data/events.json on main
+    photos: [],
     nextId: 1,
   };
 
-  // ---------- Auth ----------
+  // ---------- Auth (password gate) ----------
   async function sha256Hex(str) {
     const buf = new TextEncoder().encode(str);
     const hash = await crypto.subtle.digest("SHA-256", buf);
@@ -50,6 +56,7 @@
     initForm();
     initDropzone();
     initGenerate();
+    initDirectUpload();
   }
 
   async function loadExisting() {
@@ -59,16 +66,14 @@
         const data = await res.json();
         if (data && data.events) state.existing = data;
       }
-    } catch (e) {
-      // First-time setup: keep defaults.
-    }
+    } catch (e) { /* first-run: keep defaults */ }
     const count = (state.existing.events || []).length;
     $("#existing-count").textContent = count === 0
       ? "既存イベント: なし（初めてのアップロードです）"
       : `既存イベント: ${count} 件（今回追加されます）`;
   }
 
-  // ---------- Form ----------
+  // ---------- Event form / slug ----------
   function initForm() {
     const today = new Date().toISOString().slice(0, 10);
     $("#event-date").value = today;
@@ -89,7 +94,6 @@
       .slice(0, 40);
     const ym = date.slice(0, 7);
     if (base) return `${ym}-${base}`;
-    // Japanese-only titles (no ASCII): derive stable 4-char suffix from title
     const seed = [...title].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7);
     const suffix = seed.toString(36).slice(0, 4).padStart(4, "0");
     return `${date}-${suffix}`;
@@ -99,7 +103,7 @@
     $("#slug-preview").textContent = computeSlug();
   }
 
-  // ---------- Dropzone ----------
+  // ---------- Dropzone / thumbs ----------
   function initDropzone() {
     const dz = $("#dropzone");
     const file = $("#file-input");
@@ -117,11 +121,10 @@
   async function handleFiles(fileList) {
     const files = [...fileList].filter(f => /^image\/(jpeg|png|webp|gif)$/.test(f.type));
     for (const f of files) {
-      const photo = await readPhoto(f);
-      state.photos.push(photo);
+      state.photos.push(await readPhoto(f));
     }
     renderThumbs();
-    updateGenerateEnabled();
+    updateButtonsEnabled();
   }
 
   function readPhoto(file) {
@@ -131,10 +134,8 @@
       img.onload = () => {
         resolve({
           id: state.nextId++,
-          file, url,
-          caption: "",
-          w: img.naturalWidth,
-          h: img.naturalHeight,
+          file, url, caption: "",
+          w: img.naturalWidth, h: img.naturalHeight,
         });
       };
       img.src = url;
@@ -159,12 +160,9 @@
         URL.revokeObjectURL(p.url);
         state.photos.splice(idx, 1);
         renderThumbs();
-        updateGenerateEnabled();
+        updateButtonsEnabled();
       });
-      el.querySelector(".caption").addEventListener("input", (e) => {
-        p.caption = e.target.value;
-      });
-      // Drag sort
+      el.querySelector(".caption").addEventListener("input", (e) => { p.caption = e.target.value; });
       el.addEventListener("dragstart", (e) => { e.dataTransfer.setData("text/plain", p.id); el.style.opacity = "0.4"; });
       el.addEventListener("dragend", () => { el.style.opacity = ""; });
       el.addEventListener("dragover", (e) => e.preventDefault());
@@ -182,68 +180,242 @@
     });
   }
 
-  function updateGenerateEnabled() {
-    $("#generate").disabled = state.photos.length === 0;
+  function updateButtonsEnabled() {
+    const has = state.photos.length > 0;
+    $("#generate").disabled = !has;
+    const direct = $("#upload-direct");
+    if (direct) direct.disabled = !has;
   }
 
-  // ---------- Generate ZIP ----------
-  function initGenerate() {
-    $("#generate").addEventListener("click", generate);
-    updateGenerateEnabled();
-  }
-
-  async function generate() {
+  // ---------- Build merged events.json + photo entries ----------
+  function buildEventPayload() {
     const title = $("#event-title").value.trim();
     const date = $("#event-date").value;
     const desc = $("#event-description").value.trim();
-    if (!title) { setStatus("イベント名を入力してください"); return; }
-    if (!date)  { setStatus("日付を入力してください"); return; }
-    if (state.photos.length === 0) { setStatus("写真を追加してください"); return; }
+    if (!title) return { error: "イベント名を入力してください" };
+    if (!date)  return { error: "日付を入力してください" };
+    if (state.photos.length === 0) return { error: "写真を追加してください" };
 
-    setStatus("ZIP を生成中…");
     const slug = computeSlug();
-    const zip = new JSZip();
-
-    // Build new photo entries with sequential filenames
-    const newPhotos = [];
-    state.photos.forEach((p, i) => {
+    const photoEntries = state.photos.map((p, i) => {
       const ext = extFromType(p.file.type) || extFromName(p.file.name) || "jpg";
       const name = `${String(i + 1).padStart(2, "0")}.${ext}`;
-      const path = `photos/${slug}/${name}`;
-      zip.file(path, p.file);
-      newPhotos.push({
-        src: path,
-        w: p.w,
-        h: p.h,
+      return {
+        path: `photos/${slug}/${name}`,
+        file: p.file,
+        w: p.w, h: p.h,
         caption: p.caption || ""
-      });
+      };
     });
 
-    // Merge with existing events
     const next = JSON.parse(JSON.stringify(state.existing));
     next.events = (next.events || []).filter(e => e.slug !== slug);
     next.events.push({
-      slug,
-      title,
-      date,
-      description: desc,
-      photos: newPhotos
+      slug, title, date, description: desc,
+      photos: photoEntries.map(p => ({ src: p.path, w: p.w, h: p.h, caption: p.caption }))
     });
     next.events.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
 
-    zip.file("data/events.json", JSON.stringify(next, null, 2) + "\n");
+    return { slug, title, photoEntries, eventsJson: JSON.stringify(next, null, 2) + "\n" };
+  }
 
+  // ---------- ZIP fallback ----------
+  function initGenerate() {
+    $("#generate").addEventListener("click", generateZip);
+    updateButtonsEnabled();
+  }
+
+  async function generateZip() {
+    const payload = buildEventPayload();
+    if (payload.error) { setZipStatus(payload.error); return; }
+    setZipStatus("ZIP を生成中…");
+    const zip = new JSZip();
+    for (const p of payload.photoEntries) zip.file(p.path, p.file);
+    zip.file("data/events.json", payload.eventsJson);
     const blob = await zip.generateAsync({ type: "blob" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${slug}.zip`;
+    a.download = `${payload.slug}.zip`;
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
-    setStatus(`ZIP をダウンロードしました: ${slug}.zip`);
+    setZipStatus(`ダウンロード完了: ${payload.slug}.zip`);
   }
 
+  // ---------- Direct GitHub upload (via Git Data API) ----------
+  function getPat() { return localStorage.getItem(PAT_KEY) || ""; }
+  function setPat(v) { localStorage.setItem(PAT_KEY, v); }
+  function clearPat() { localStorage.removeItem(PAT_KEY); }
+
+  function initDirectUpload() {
+    renderUploadSection();
+
+    $("#pat-save").addEventListener("click", async () => {
+      const v = $("#pat-input").value.trim();
+      $("#pat-error").textContent = "";
+      if (!v) { $("#pat-error").textContent = "トークンを入力してください"; return; }
+      $("#pat-error").textContent = "検証中…";
+      const ok = await verifyPat(v);
+      if (ok.ok) {
+        setPat(v);
+        $("#pat-error").textContent = "";
+        $("#pat-input").value = "";
+        renderUploadSection();
+      } else {
+        $("#pat-error").textContent = `検証失敗: ${ok.msg}`;
+      }
+    });
+
+    $("#pat-reset").addEventListener("click", () => {
+      if (!confirm("保存されているトークンを削除しますか？")) return;
+      clearPat();
+      renderUploadSection();
+    });
+
+    $("#upload-direct").addEventListener("click", uploadDirect);
+  }
+
+  function renderUploadSection() {
+    const hasPat = !!getPat();
+    $("#upload-ready").classList.toggle("hidden", !hasPat);
+    $("#pat-setup").classList.toggle("hidden", hasPat);
+    updateButtonsEnabled();
+  }
+
+  async function verifyPat(pat) {
+    try {
+      const res = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}`, {
+        headers: ghHeaders(pat)
+      });
+      if (res.status === 401) return { ok: false, msg: "トークンが無効です" };
+      if (res.status === 404) return { ok: false, msg: "リポジトリにアクセスできません（権限/対象リポジトリを確認）" };
+      if (!res.ok) return { ok: false, msg: `HTTP ${res.status}` };
+      const data = await res.json();
+      if (!data.permissions || (!data.permissions.push && !data.permissions.admin && !data.permissions.maintain)) {
+        return { ok: false, msg: "書き込み権限がありません (Contents: Read and write が必要)" };
+      }
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, msg: e.message || "ネットワークエラー" };
+    }
+  }
+
+  function ghHeaders(pat, extra = {}) {
+    return {
+      "Accept": "application/vnd.github+json",
+      "Authorization": `Bearer ${pat}`,
+      "X-GitHub-Api-Version": "2022-11-28",
+      ...extra,
+    };
+  }
+
+  async function ghApi(pat, path, init = {}) {
+    const res = await fetch(`https://api.github.com${path}`, {
+      ...init,
+      headers: ghHeaders(pat, init.headers || {}),
+    });
+    if (!res.ok) {
+      let detail = "";
+      try { detail = (await res.json()).message || ""; } catch {}
+      throw new Error(`GitHub ${res.status}${detail ? `: ${detail}` : ""}`);
+    }
+    return res.json();
+  }
+
+  async function fileToBase64(file) {
+    const buf = await file.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    // Chunked conversion to avoid call-stack limits on big images
+    let binary = "";
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    }
+    return btoa(binary);
+  }
+
+  async function uploadDirect() {
+    const pat = getPat();
+    if (!pat) { setUploadStatus("トークンが未登録です"); return; }
+
+    const payload = buildEventPayload();
+    if (payload.error) { setUploadStatus(payload.error); return; }
+
+    const btn = $("#upload-direct");
+    btn.disabled = true;
+    try {
+      setUploadStatus("最新の状態を取得中…");
+      const ref = await ghApi(pat, `/repos/${REPO_OWNER}/${REPO_NAME}/git/ref/heads/${REPO_BRANCH}`);
+      const latestCommit = await ghApi(pat, `/repos/${REPO_OWNER}/${REPO_NAME}/git/commits/${ref.object.sha}`);
+      const baseTreeSha = latestCommit.tree.sha;
+
+      // 1. Create blobs for photos (binary → base64)
+      const treeEntries = [];
+      for (let i = 0; i < payload.photoEntries.length; i++) {
+        const p = payload.photoEntries[i];
+        setUploadStatus(`写真をアップロード中… ${i + 1}/${payload.photoEntries.length}`);
+        const content = await fileToBase64(p.file);
+        const blob = await ghApi(pat, `/repos/${REPO_OWNER}/${REPO_NAME}/git/blobs`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content, encoding: "base64" }),
+        });
+        treeEntries.push({ path: p.path, mode: "100644", type: "blob", sha: blob.sha });
+      }
+
+      // 2. events.json blob
+      setUploadStatus("メタデータを更新中…");
+      const jsonBlob = await ghApi(pat, `/repos/${REPO_OWNER}/${REPO_NAME}/git/blobs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: payload.eventsJson, encoding: "utf-8" }),
+      });
+      treeEntries.push({ path: "data/events.json", mode: "100644", type: "blob", sha: jsonBlob.sha });
+
+      // 3. Create tree based on latest
+      const tree = await ghApi(pat, `/repos/${REPO_OWNER}/${REPO_NAME}/git/trees`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ base_tree: baseTreeSha, tree: treeEntries }),
+      });
+
+      // 4. Create commit
+      const commit = await ghApi(pat, `/repos/${REPO_OWNER}/${REPO_NAME}/git/commits`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: `add event: ${payload.title}`,
+          tree: tree.sha,
+          parents: [ref.object.sha],
+        }),
+      });
+
+      // 5. Fast-forward the branch
+      setUploadStatus("公開ブランチを更新中…");
+      await ghApi(pat, `/repos/${REPO_OWNER}/${REPO_NAME}/git/refs/heads/${REPO_BRANCH}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sha: commit.sha }),
+      });
+
+      setUploadStatus(`✓ 公開しました。GitHub Pages 反映まで 1〜2 分程度: https://${REPO_OWNER}.github.io/${REPO_NAME}/`);
+      // Clear form
+      state.photos.forEach(p => URL.revokeObjectURL(p.url));
+      state.photos = [];
+      renderThumbs();
+      await loadExisting();
+      $("#event-title").value = "";
+      $("#event-description").value = "";
+      updateSlugPreview();
+    } catch (err) {
+      setUploadStatus(`エラー: ${err.message}`);
+    } finally {
+      updateButtonsEnabled();
+    }
+  }
+
+  // ---------- Helpers ----------
   function extFromType(type) {
     if (type === "image/jpeg") return "jpg";
     if (type === "image/png")  return "png";
@@ -255,8 +427,8 @@
     const m = /\.([a-z0-9]+)$/i.exec(name || "");
     return m ? m[1].toLowerCase() : null;
   }
-
-  function setStatus(msg) { $("#status").textContent = msg; }
+  function setZipStatus(msg) { $("#status").textContent = msg; }
+  function setUploadStatus(msg) { $("#upload-status").textContent = msg; }
   function escapeAttr(s) { return String(s).replace(/"/g, "&quot;"); }
 
   document.addEventListener("DOMContentLoaded", initGate);

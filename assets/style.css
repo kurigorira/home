@@ -479,3 +479,40 @@ button { font-family: inherit; }
 }
 
 .hidden { display: none !important; }
+
+.linklike {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--ink-soft);
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 3px;
+  cursor: pointer;
+  letter-spacing: 0.05em;
+}
+.linklike:hover { color: var(--ink); }
+
+details > summary { list-style: none; outline: none; user-select: none; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "＋ ";
+  color: var(--ink-faint);
+  font-weight: 300;
+}
+details[open] > summary::before { content: "− "; }
+
+.admin details {
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  padding: 14px 18px;
+  margin-top: 16px;
+}
+.admin details ol, .admin details p { margin: 0; }
+.admin code {
+  background: #f1ede5;
+  padding: 2px 6px;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}

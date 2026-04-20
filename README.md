@@ -23,19 +23,37 @@ python3 -m http.server 8000
 
 ## 写真を追加する（管理者モード）
 
-1. `admin.html` を開き、パスワードを入力（デフォルトは `family`）
-2. イベント名・日付・ひとこと（任意）を入力
-3. 写真をドラッグ＆ドロップ、または選択
-4. キャプションを編集・並び替え
-5. **「ZIP を生成してダウンロード」** をクリック
-6. ダウンロードした ZIP を解凍し、中身（`photos/` と `data/events.json`）をリポジトリ直下に配置（上書き）
-7. コミット＆プッシュ
-   ```sh
-   git add photos data/events.json
-   git commit -m "add event: 春の結婚式"
-   git push
-   ```
-8. GitHub Pages に数十秒で反映されます
+### 方法 A：GitHub に直接アップロード（推奨・ボタン一発）
+
+初回のみ GitHub Personal Access Token (PAT) を登録すれば、以降はブラウザから直接公開できます。
+
+1. `admin.html` を開き、パスワード（デフォルトは `family`）で解除
+2. **【初回のみ】** Personal Access Token を登録
+   - [GitHub のトークン発行ページ](https://github.com/settings/personal-access-tokens/new) を開く
+   - Token name: `Family Album` などお好みで
+   - Expiration: 1 年など長め推奨
+   - Repository access: `Only select repositories` → `kurigorira/home` を選択
+   - Repository permissions → **Contents** を **Read and write**
+   - **Generate token** → 表示された `github_pat_...` をコピー
+   - 管理者画面の欄に貼り付けて「トークンを保存」
+3. イベント名・日付・ひとこと（任意）を入力
+4. 写真をドラッグ＆ドロップ、キャプション編集・並び替え
+5. **「GitHub に直接アップロード」** をクリック
+6. 1〜2 分で GitHub Pages に反映 → ギャラリーに表示されます
+
+> トークンはブラウザの `localStorage` に保存されます（このブラウザ・このドメインに限定）。他の端末から使う場合は再登録が必要です。
+> 「トークンを再設定」リンクから削除できます。
+
+### 方法 B：ZIP をダウンロードして手動アップ（トークンを使いたくない場合）
+
+1. `admin.html` でイベント情報と写真を入力
+2. **「ZIP をダウンロード」** をクリック
+3. ZIP を解凍
+4. GitHub のリポジトリ [kurigorira/home](https://github.com/kurigorira/home) を開き、**リポジトリ直下**で「Add file → Upload files」
+5. 解凍した `photos` と `data` フォルダを**まとめて**ドラッグ&ドロップ
+6. Commit → 1〜2 分で反映
+
+> ⚠ GitHub 上ですでに `photos/` に入った状態で `photos/` フォルダをドロップすると、入れ子（`photos/photos/`）になって画像が表示されません。必ずリポジトリ直下で行ってください。
 
 ---
 
