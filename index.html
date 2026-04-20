@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>家族のアルバム</title>
+  <meta name="description" content="家族の大切な瞬間を集めた観賞用のアルバム。">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Inter:wght@300;400;500&family=Noto+Sans+JP:wght@300;400&family=Noto+Serif+JP:wght@300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="eyebrow">Family Archive</div>
+    <h1 id="site-title">家族のアルバム</h1>
+    <p class="subtitle" id="site-subtitle">Our Family Memories</p>
+    <div class="meta" id="site-meta"></div>
+  </header>
+
+  <nav class="filter-bar" id="filter-bar" aria-label="イベント">
+    <div class="filter-bar__inner" id="filter-bar-inner"></div>
+  </nav>
+
+  <main class="events" id="events"></main>
+
+  <footer class="site-footer">
+    <div>© Family Archive · <a href="admin.html">管理者モード</a></div>
+  </footer>
+
+  <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="拡大表示">
+    <button class="lightbox__close" id="lightbox-close" aria-label="閉じる">×</button>
+    <button class="lightbox__btn lightbox__btn--prev" id="lightbox-prev" aria-label="前へ">‹</button>
+    <img class="lightbox__img" id="lightbox-img" alt="">
+    <button class="lightbox__btn lightbox__btn--next" id="lightbox-next" aria-label="次へ">›</button>
+    <div class="lightbox__caption" id="lightbox-cap"></div>
+  </div>
+
+  <script src="assets/gallery.js"></script>
+</body>
+</html>
