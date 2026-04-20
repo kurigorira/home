@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>管理者モード · 家族のアルバム</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;1,400&family=Inter:wght@300;400;500&family=Noto+Sans+JP:wght@300;400&family=Noto+Serif+JP:wght@300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <section id="gate" class="admin gate">
+    <h1>管理者モード</h1>
+    <form id="gate-form">
+      <div class="field">
+        <label for="gate-password">パスワード</label>
+        <input type="password" id="gate-password" autocomplete="current-password" autofocus>
+      </div>
+      <button class="btn" type="submit">ロックを解除</button>
+      <div class="error" id="gate-error"></div>
+    </form>
+    <p style="margin-top:48px; font-size:12px; color:var(--ink-faint); letter-spacing:.1em;">
+      <a href="index.html" style="border-bottom:1px solid var(--line);">← ギャラリーへ戻る</a>
+    </p>
+  </section>
+
+  <section id="admin" class="admin hidden">
+    <div class="eyebrow">Admin</div>
+    <h1>新しいイベントを追加</h1>
+
+    <div class="field">
+      <div id="existing-count" class="status"></div>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label for="event-title">イベント名</label>
+        <input type="text" id="event-title" placeholder="例：春の結婚式">
+      </div>
+      <div class="field">
+        <label for="event-date">日付</label>
+        <input type="date" id="event-date">
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="event-description">ひとこと（任意）</label>
+      <textarea id="event-description" placeholder="桜の咲く日に"></textarea>
+    </div>
+
+    <div class="field">
+      <label>フォルダ名（自動生成）</label>
+      <div class="status"><code id="slug-preview"></code></div>
+    </div>
+
+    <div class="field">
+      <label>写真</label>
+      <div class="dropzone" id="dropzone">
+        ここに写真をドラッグ＆ドロップ<br>
+        <span style="font-size:12px; font-style:normal; letter-spacing:.2em; text-transform:uppercase; color:var(--ink-faint);">または クリックして選択</span>
+      </div>
+      <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden>
+      <div class="thumbs" id="thumbs"></div>
+    </div>
+
+    <div class="admin__section">
+      <button class="btn" id="generate" disabled>ZIP を生成してダウンロード</button>
+      <div class="status" id="status"></div>
+
+      <div class="steps">
+        <strong>生成後の手順</strong><br>
+        1. ダウンロードした ZIP を解凍<br>
+        2. 解凍した <code>photos/</code> と <code>data/</code> をリポジトリ直下に配置（上書き）<br>
+        3. <code>git add . && git commit -m "add event" && git push</code><br>
+        4. GitHub Pages に数十秒で反映されます
+      </div>
+
+      <p style="margin-top:32px;"><a href="index.html" style="font-size:12px; letter-spacing:.2em; text-transform:uppercase; color:var(--ink-faint); border-bottom:1px solid var(--line);">← ギャラリーへ戻る</a></p>
+    </div>
+  </section>
+
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="assets/admin.js"></script>
+</body>
+</html>
