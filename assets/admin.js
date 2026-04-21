@@ -188,9 +188,13 @@
   }
 
   // ---------- Event form / slug ----------
+  function todayLocal() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
   function initForm() {
-    const today = new Date().toISOString().slice(0, 10);
-    $("#event-date").value = today;
+    $("#event-date").value = todayLocal();
     $("#event-title").addEventListener("input", updateSlugPreview);
     $("#event-date").addEventListener("input", updateSlugPreview);
     updateSlugPreview();
