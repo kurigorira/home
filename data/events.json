@@ -5,6 +5,19 @@
   },
   "events": [
     {
+      "slug": "2026-04-22-1tc8",
+      "title": "アンパンまんのマーチ",
+      "date": "2026-04-22",
+      "description": "歌が上手ならいいのですが",
+      "photos": [
+        {
+          "type": "youtube",
+          "videoId": "mockNi5csvQ",
+          "caption": ""
+        }
+      ]
+    },
+    {
       "slug": "2026-04-20-1mb9",
       "title": "テスト投稿",
       "date": "2026-04-20",
