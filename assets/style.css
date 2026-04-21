@@ -503,6 +503,48 @@ button { font-family: inherit; }
 
 .admin__section { margin-top: 48px; padding-top: 48px; border-top: 1px solid var(--line); }
 
+.event-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+.event-row:last-child { border-bottom: 0; }
+.event-row__info { flex: 1; min-width: 0; }
+.event-row__title {
+  font-family: var(--serif);
+  font-size: 16px;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+.event-row__meta {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--ink-faint);
+}
+.event-row__delete {
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+  padding: 6px 14px;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color .2s, color .2s;
+}
+.event-row__delete:hover {
+  border-color: #a14b4b;
+  color: #a14b4b;
+}
+.event-row__delete:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .admin .steps {
   font-family: var(--sans);
   font-size: 13px;
