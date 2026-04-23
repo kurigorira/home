@@ -71,12 +71,130 @@
     $("#existing-count").textContent = count === 0
       ? "既存イベント: なし（初めてのアップロードです）"
       : `既存イベント: ${count} 件（今回追加されます）`;
+    renderExistingEvents();
+  }
+
+  // ---------- Existing events list / delete ----------
+  function renderExistingEvents() {
+    const details = $("#existing-events-details");
+    const listEl = $("#existing-events-list");
+    if (!details || !listEl) return;
+    const events = (state.existing.events || []).slice()
+      .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    if (events.length === 0) {
+      details.classList.add("hidden");
+      listEl.innerHTML = "";
+      return;
+    }
+    details.classList.remove("hidden");
+    listEl.innerHTML = "";
+    for (const ev of events) {
+      const row = document.createElement("div");
+      row.className = "event-row";
+      const photoCount = (ev.photos || []).length;
+      row.innerHTML = `
+        <div class="event-row__info">
+          <div class="event-row__title">${escapeHtml(ev.title || ev.slug)}</div>
+          <div class="event-row__meta">${escapeHtml(ev.date || "")} · ${photoCount} 点 · <code>${escapeHtml(ev.slug)}</code></div>
+        </div>
+        <button type="button" class="event-row__delete">削除</button>
+      `;
+      row.querySelector(".event-row__delete").addEventListener("click", () => deleteEvent(ev));
+      listEl.appendChild(row);
+    }
+  }
+
+  async function deleteEvent(ev) {
+    const pat = getPat();
+    if (!pat) {
+      setExistingStatus("削除するには下の「アップロード方法」から GitHub トークンを登録してください。");
+      return;
+    }
+    const photoCount = (ev.photos || []).length;
+    const confirmMsg = `「${ev.title || ev.slug}」を削除します。\n写真・動画 ${photoCount} 点も一緒に削除されます。\n元に戻せません。本当によろしいですか？`;
+    if (!confirm(confirmMsg)) return;
+
+    // Disable all delete buttons during operation
+    $$(".event-row__delete").forEach(b => b.disabled = true);
+
+    try {
+      setExistingStatus("最新の状態を取得中…");
+      const ref = await ghApi(pat, `/repos/${REPO_OWNER}/${REPO_NAME}/git/ref/heads/${REPO_BRANCH}`);
+      const latestCommit = await ghApi(pat, `/repos/${REPO_OWNER}/${REPO_NAME}/git/commits/${ref.object.sha}`);
+      const baseTreeSha = latestCommit.tree.sha;
+
+      // Find all files under photos/<slug>/
+      const recursive = await ghApi(pat, `/repos/${REPO_OWNER}/${REPO_NAME}/git/trees/${baseTreeSha}?recursive=1`);
+      const prefix = `photos/${ev.slug}/`;
+      const deletions = recursive.tree
+        .filter(t => t.type === "blob" && t.path.startsWith(prefix))
+        .map(t => ({ path: t.path, mode: "100644", type: "blob", sha: null }));
+
+      // Build new events.json without this event
+      const next = JSON.parse(JSON.stringify(state.existing));
+      next.events = (next.events || []).filter(e => e.slug !== ev.slug);
+
+      setExistingStatus(`削除を適用中…（ファイル ${deletions.length} 件）`);
+      const jsonBlob = await ghApi(pat, `/repos/${REPO_OWNER}/${REPO_NAME}/git/blobs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: JSON.stringify(next, null, 2) + "\n", encoding: "utf-8" }),
+      });
+
+      const treeEntries = [
+        ...deletions,
+        { path: "data/events.json", mode: "100644", type: "blob", sha: jsonBlob.sha },
+      ];
+
+      const tree = await ghApi(pat, `/repos/${REPO_OWNER}/${REPO_NAME}/git/trees`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ base_tree: baseTreeSha, tree: treeEntries }),
+      });
+
+      const commit = await ghApi(pat, `/repos/${REPO_OWNER}/${REPO_NAME}/git/commits`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: `delete event: ${ev.title || ev.slug}`,
+          tree: tree.sha,
+          parents: [ref.object.sha],
+        }),
+      });
+
+      await ghApi(pat, `/repos/${REPO_OWNER}/${REPO_NAME}/git/refs/heads/${REPO_BRANCH}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sha: commit.sha }),
+      });
+
+      setExistingStatus(`✓ 削除しました: ${ev.title || ev.slug}（反映まで 1〜2 分）`);
+      await loadExisting();
+    } catch (err) {
+      setExistingStatus(`エラー: ${err.message}`);
+      $$(".event-row__delete").forEach(b => b.disabled = false);
+    }
+  }
+
+  function setExistingStatus(msg) {
+    const el = $("#existing-events-status");
+    if (el) el.textContent = msg;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[c]));
   }
 
   // ---------- Event form / slug ----------
+  function todayLocal() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
   function initForm() {
-    const today = new Date().toISOString().slice(0, 10);
-    $("#event-date").value = today;
+    $("#event-date").value = todayLocal();
     $("#event-title").addEventListener("input", updateSlugPreview);
     $("#event-date").addEventListener("input", updateSlugPreview);
     updateSlugPreview();
