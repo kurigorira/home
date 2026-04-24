@@ -552,6 +552,7 @@
   async function ghApi(pat, path, init = {}) {
     const res = await fetch(`https://api.github.com${path}`, {
       ...init,
+      cache: "no-store",
       headers: ghHeaders(pat, init.headers || {}),
     });
     if (!res.ok) {
