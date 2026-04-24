@@ -70,62 +70,6 @@
           "caption": ""
         }
       ]
-    },
-    {
-      "slug": "2026-03-sample",
-      "title": "サンプル・春のひととき",
-      "date": "2026-03-15",
-      "description": "管理者モードから実際の写真を追加するまでのプレビュー。",
-      "photos": [
-        {
-          "src": "photos/2026-03-sample/01.svg",
-          "w": 1200,
-          "h": 1600,
-          "caption": "朝の光"
-        },
-        {
-          "src": "photos/2026-03-sample/02.svg",
-          "w": 1200,
-          "h": 800,
-          "caption": "集い"
-        },
-        {
-          "src": "photos/2026-03-sample/03.svg",
-          "w": 1200,
-          "h": 1200,
-          "caption": "桜"
-        },
-        {
-          "src": "photos/2026-03-sample/04.svg",
-          "w": 1200,
-          "h": 900,
-          "caption": "笑い声"
-        },
-        {
-          "src": "photos/2026-03-sample/05.svg",
-          "w": 1200,
-          "h": 1500,
-          "caption": "食卓"
-        },
-        {
-          "src": "photos/2026-03-sample/06.svg",
-          "w": 1200,
-          "h": 1000,
-          "caption": "散歩"
-        },
-        {
-          "src": "photos/2026-03-sample/07.svg",
-          "w": 1200,
-          "h": 1400,
-          "caption": "みんなで"
-        },
-        {
-          "src": "photos/2026-03-sample/08.svg",
-          "w": 1200,
-          "h": 1100,
-          "caption": "夕暮れ"
-        }
-      ]
     }
   ]
 }
