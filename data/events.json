@@ -5,6 +5,21 @@
   },
   "events": [
     {
+      "slug": "2026-04-24-7fel",
+      "title": "あああ",
+      "date": "2026-04-24",
+      "description": "ええええええ",
+      "photos": [
+        {
+          "type": "image",
+          "src": "photos/2026-04-24-7fel/01.jpg",
+          "w": 4032,
+          "h": 3024,
+          "caption": ""
+        }
+      ]
+    },
+    {
       "slug": "2026-04-22-1tc8",
       "title": "アンパンまんのマーチ",
       "date": "2026-04-22",
