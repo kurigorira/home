@@ -5,6 +5,19 @@
   },
   "events": [
     {
+      "slug": "2026-04-28-1awx",
+      "title": "栄光のかけはし",
+      "date": "2026-04-28",
+      "description": "ちょっと素人が練習して引けるだけですが、きくとあきます",
+      "photos": [
+        {
+          "type": "youtube",
+          "videoId": "5UxfPL7QYV4",
+          "caption": ""
+        }
+      ]
+    },
+    {
       "slug": "2026-04-22-1tc8",
       "title": "アンパンまんのマーチ",
       "date": "2026-04-22",
