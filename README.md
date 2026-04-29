@@ -4,6 +4,7 @@
 
 - **観賞用ページ** `index.html` — 1 ページにメイソンリーで全写真を表示
 - **管理者モード** `admin.html` — ブラウザから写真をアップし、ZIP で必要ファイルを出力
+- **カード明細トラッカー** `cards/` — PayPay／セゾンカードの利用明細を CSV から取り込み、暗号化して保管・閲覧（[詳細](#カード明細トラッカー-cards)）
 
 依存なし・ビルド不要の素の HTML/CSS/JS。GitHub Pages でそのまま公開できます。
 
@@ -141,3 +142,55 @@ echo -n "new-password" | shasum -a 256
 | 段組みの数を変える | `assets/style.css` の `.masonry` メディアクエリ |
 | 写真を手動で削除 | `data/events.json` の該当エントリ + `photos/<slug>/` を削除してコミット |
 | 初期サンプルを消す | `photos/2026-03-sample/` と `data/events.json` の該当イベントを削除 |
+
+---
+
+## カード明細トラッカー (`cards/`)
+
+PayPay カード／セゾンカードの利用明細を CSV から取り込み、ブラウザ内で **AES-GCM 暗号化**してから GitHub にコミットして端末間共有するダッシュボード。
+
+- **ダッシュボード** `cards/index.html` — パスフレーズで復号 → KPI／日次推移／月別／カテゴリ別／明細表
+- **取込画面** `cards/admin.html` — 管理パスワード（アルバムと共通：`family`）→ パスフレーズ設定 → CSV ドロップ → 暗号化コミット
+
+### 初回セットアップ
+
+1. **PAT 登録**：アルバム側で既に登録済みなら同じものを共有（`localStorage` キー `family_album_pat`）。未登録なら `cards/admin.html` のフォームから登録（`Contents: Read and write` 権限）
+2. **暗号化パスフレーズ決定**：8 文字以上。**紛失すると復元不可**なのでパスワードマネージャに保存推奨
+3. **CSV ダウンロード**：
+   - PayPay カード会員メニュー → ご利用明細 → CSV
+   - セゾン Net アンサー → ご利用明細 → CSV／TSV
+   - ファイル名に `paypay` または `saison` を含めると自動判定
+4. CSV を `cards/admin.html` のドロップゾーンへ → カテゴリ確認 → 「暗号化してコミット」
+
+### 日々の使い方
+
+- `cards/index.html` を開く → パスフレーズを入力 → ダッシュボード表示（パスフレーズはタブを閉じるまで `sessionStorage` にキャッシュ）
+- 新しい明細が出たら `cards/admin.html` から CSV を追加。同じ明細を再取込しても**重複しない**（`カード+日付+金額+店舗` の SHA-256 で重複検知）
+
+### カテゴリ分け
+
+- 店舗名ルール（例：「セブン」→ 食費）でまず自動付与
+- 取込プレビュー画面で 1 件ずつ手動上書き可（手動分は以降ルール再適用の対象外）
+- ルールは `cards/admin.html` の「店舗名ルール」セクションで追加・削除
+
+### プライバシー
+
+- リポジトリは公開ですが、明細データ（`data/cards.json.enc`）は **AES-GCM-256 + PBKDF2-SHA256（31 万回反復）** で暗号化されています。パスフレーズなしには復号できません。
+- パスフレーズはローカルの `sessionStorage` のみに保持し、サーバには一切送信されません。
+
+### ディレクトリ追加分
+
+```
+cards/
+├── index.html              # ダッシュボード
+├── admin.html              # CSV 取込
+└── assets/
+    ├── cards.css
+    ├── cards-crypto.js     # AES-GCM + PBKDF2
+    ├── cards-csv.js        # CSV パーサ（PayPay／セゾン）
+    ├── cards-charts.js     # 素の SVG グラフ
+    ├── cards-view.js       # ダッシュボードのロジック
+    └── cards-admin.js      # 取込・コミットのロジック
+data/
+└── cards.json.enc          # 暗号化済み JSON（初回コミット時に生成）
+```
