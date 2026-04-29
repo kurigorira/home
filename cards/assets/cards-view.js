@@ -9,6 +9,7 @@
 
   const state = {
     data: null,
+    selectedMonth: null, // "YYYY-MM"
     filter: { card: "all", category: "all", month: "all", q: "" },
     page: 1,
     pageSize: 50,
@@ -18,7 +19,6 @@
 
   async function init() {
     bindUnlockForm();
-    bindFilters();
     const cached = sessionStorage.getItem(PASS_KEY);
     if (cached) {
       const ok = await tryLoad(cached);
@@ -52,7 +52,6 @@
     try {
       const res = await fetch(DATA_URL, { cache: "no-store" });
       if (res.status === 404) {
-        // first run — show empty state
         showEmpty();
         return true;
       }
@@ -82,19 +81,13 @@
   }
 
   // ---------- Aggregations ----------
-  function txInRange(txs, fromDate, toDate) {
-    return txs.filter(t => t.date >= fromDate && t.date <= toDate);
-  }
-
-  function dailySeries(txs, days) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+  function dailySeriesForMonth(txs, ym) {
+    const [y, m] = ym.split("-").map(Number);
+    const lastDay = new Date(y, m, 0).getDate();
     const out = [];
     const idx = new Map();
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - i);
-      const key = isoDate(d);
+    for (let d = 1; d <= lastDay; d++) {
+      const key = `${ym}-${String(d).padStart(2, "0")}`;
       const row = { date: key, paypay: 0, saison: 0 };
       out.push(row);
       idx.set(key, row);
@@ -136,8 +129,34 @@
       .sort((a, b) => b.value - a.value);
   }
 
+  function monthsWithData(txs) {
+    return [...new Set(txs.map(t => t.date.slice(0, 7)))].sort().reverse();
+  }
+
+  function prevYm(ym) {
+    const [y, m] = ym.split("-").map(Number);
+    const d = new Date(y, m - 2, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  }
+
   function isoDate(d) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
+  function statsForMonth(txs, ym) {
+    const monthTx = txs.filter(t => t.date.startsWith(ym));
+    const positives = monthTx.filter(t => t.amount > 0);
+    const total = positives.reduce((s, t) => s + t.amount, 0);
+    const paypay = positives.filter(t => t.card === "paypay").reduce((s, t) => s + t.amount, 0);
+    const saison = positives.filter(t => t.card === "saison").reduce((s, t) => s + t.amount, 0);
+    const refunds = monthTx.filter(t => t.amount < 0).reduce((s, t) => s + t.amount, 0);
+    const count = positives.length;
+    const avg = count ? Math.round(total / count) : 0;
+    let max = null;
+    for (const t of positives) {
+      if (!max || t.amount > max.amount) max = t;
+    }
+    return { ym, total, paypay, saison, refunds, count, avg, max };
   }
 
   // ---------- Render ----------
@@ -149,23 +168,32 @@
       return;
     }
 
-    // Build content scaffold once
     if (!$("#kpi-row")) buildScaffold();
 
-    renderKpis(txs);
-    renderDaily(txs);
+    const months = monthsWithData(txs);
+    const today = isoDate(new Date());
+    const ymCurrent = today.slice(0, 7);
+    if (!state.selectedMonth || !months.includes(state.selectedMonth)) {
+      state.selectedMonth = months.includes(ymCurrent) ? ymCurrent : months[0];
+    }
+
+    renderMonthSelector(months);
+    renderKpis(txs, state.selectedMonth);
+    renderDaily(txs, state.selectedMonth);
     renderMonthly(txs);
-    renderCategory(txs);
+    renderCategory(txs, state.selectedMonth);
+    renderMonthlySummary(txs, months);
     renderTable(txs);
   }
 
   function buildScaffold() {
     $("#dash-content").innerHTML = `
+      <div class="month-selector" id="month-selector"></div>
       <div class="kpi-row" id="kpi-row"></div>
 
       <div class="chart-block">
         <div class="chart-block__head">
-          <h2 class="chart-block__title">日次推移（過去60日）</h2>
+          <h2 class="chart-block__title" id="title-daily">日次推移</h2>
           <div class="chart-block__legend">
             <span><span class="legend__dot legend__dot--paypay"></span>PayPay</span>
             <span><span class="legend__dot legend__dot--saison"></span>セゾン</span>
@@ -191,16 +219,23 @@
       <div class="two-col">
         <div class="chart-block">
           <div class="chart-block__head">
-            <h2 class="chart-block__title">カテゴリ別（当月）</h2>
+            <h2 class="chart-block__title" id="title-cat-donut">カテゴリ別</h2>
           </div>
           <svg class="chart-svg" id="chart-category" aria-label="カテゴリ別"></svg>
         </div>
         <div class="chart-block">
           <div class="chart-block__head">
-            <h2 class="chart-block__title">カテゴリ ランキング（当月）</h2>
+            <h2 class="chart-block__title" id="title-cat-rank">カテゴリ ランキング</h2>
           </div>
           <ul class="cat-list" id="cat-list"></ul>
         </div>
+      </div>
+
+      <div class="chart-block">
+        <div class="chart-block__head">
+          <h2 class="chart-block__title">各月のサマリー</h2>
+        </div>
+        <div id="month-summary"></div>
       </div>
 
       <div class="chart-block">
@@ -220,36 +255,61 @@
     rebindFilterControls();
   }
 
-  function renderKpis(txs) {
-    const today = isoDate(new Date());
-    const ymThis = today.slice(0, 7);
-    const dPrev = new Date(); dPrev.setMonth(dPrev.getMonth() - 1);
-    const ymPrev = `${dPrev.getFullYear()}-${String(dPrev.getMonth() + 1).padStart(2, "0")}`;
+  function renderMonthSelector(months) {
+    const sel = $("#month-selector");
+    const cur = state.selectedMonth;
+    const idx = months.indexOf(cur);
+    const newer = idx > 0 ? months[idx - 1] : null; // months is desc
+    const older = idx < months.length - 1 ? months[idx + 1] : null;
+    sel.innerHTML = `
+      <button class="month-nav" id="ms-older" ${older ? "" : "disabled"} aria-label="前の月">‹</button>
+      <select id="ms-pick">
+        ${months.map(m => `<option value="${m}" ${m === cur ? "selected" : ""}>${monthLabel(m)}</option>`).join("")}
+      </select>
+      <button class="month-nav" id="ms-newer" ${newer ? "" : "disabled"} aria-label="次の月">›</button>
+    `;
+    $("#ms-pick").addEventListener("change", e => { state.selectedMonth = e.target.value; render(); });
+    if (older) $("#ms-older").addEventListener("click", () => { state.selectedMonth = older; render(); });
+    if (newer) $("#ms-newer").addEventListener("click", () => { state.selectedMonth = newer; render(); });
+  }
 
-    const todaySpend = txs.filter(t => t.date === today && t.amount > 0).reduce((s, t) => s + t.amount, 0);
-    const thisMonth = txs.filter(t => t.date.startsWith(ymThis) && t.amount > 0).reduce((s, t) => s + t.amount, 0);
-    const prevMonth = txs.filter(t => t.date.startsWith(ymPrev) && t.amount > 0).reduce((s, t) => s + t.amount, 0);
-    const paypayMonth = txs.filter(t => t.date.startsWith(ymThis) && t.card === "paypay" && t.amount > 0).reduce((s, t) => s + t.amount, 0);
-    const saisonMonth = txs.filter(t => t.date.startsWith(ymThis) && t.card === "saison" && t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  function monthLabel(ym) {
+    const [y, m] = ym.split("-");
+    return `${y} 年 ${parseInt(m, 10)} 月`;
+  }
 
-    const diff = thisMonth - prevMonth;
-    const diffPct = prevMonth ? ((diff / prevMonth) * 100).toFixed(1) : null;
+  function renderKpis(txs, ym) {
+    const cur = statsForMonth(txs, ym);
+    const prev = statsForMonth(txs, prevYm(ym));
+
+    const diff = cur.total - prev.total;
+    const diffPct = prev.total ? ((diff / prev.total) * 100).toFixed(1) : null;
     const diffCls = diff > 0 ? "kpi__sub--up" : "kpi__sub--down";
     const diffSign = diff > 0 ? "+" : "";
-    const diffSub = prevMonth
+    const diffSub = prev.total
       ? `<span class="${diffCls}">前月比 ${diffSign}${fmt(diff)} (${diffSign}${diffPct}%)</span>`
       : `<span>前月データなし</span>`;
 
+    const maxLine = cur.max
+      ? `<div class="kpi__sub">${escapeHtml(cur.max.merchant)} (${cur.max.date.slice(5)})</div>`
+      : `<div class="kpi__sub">—</div>`;
+
+    const refundLine = cur.refunds
+      ? `<div class="kpi__sub kpi__sub--down">返金 ${fmt(cur.refunds)}</div>`
+      : "";
+
     $("#kpi-row").innerHTML = `
-      <div class="kpi"><div class="kpi__label">今日の利用</div><div class="kpi__value">${fmt(todaySpend)}</div></div>
-      <div class="kpi"><div class="kpi__label">今月合計</div><div class="kpi__value">${fmt(thisMonth)}</div><div class="kpi__sub">${diffSub}</div></div>
-      <div class="kpi"><div class="kpi__label">PayPay 今月</div><div class="kpi__value">${fmt(paypayMonth)}</div></div>
-      <div class="kpi"><div class="kpi__label">セゾン 今月</div><div class="kpi__value">${fmt(saisonMonth)}</div></div>
+      <div class="kpi"><div class="kpi__label">合計</div><div class="kpi__value">${fmt(cur.total)}</div><div class="kpi__sub">${diffSub}</div>${refundLine}</div>
+      <div class="kpi"><div class="kpi__label">PayPay</div><div class="kpi__value">${fmt(cur.paypay)}</div></div>
+      <div class="kpi"><div class="kpi__label">セゾン</div><div class="kpi__value">${fmt(cur.saison)}</div></div>
+      <div class="kpi"><div class="kpi__label">件数 / 平均</div><div class="kpi__value">${cur.count} 件</div><div class="kpi__sub">平均 ${fmt(cur.avg)}</div></div>
+      <div class="kpi"><div class="kpi__label">最大1件</div><div class="kpi__value">${fmt(cur.max ? cur.max.amount : 0)}</div>${maxLine}</div>
     `;
   }
 
-  function renderDaily(txs) {
-    const points = dailySeries(txs, 60);
+  function renderDaily(txs, ym) {
+    $("#title-daily").textContent = `日次推移（${monthLabel(ym)}）`;
+    const points = dailySeriesForMonth(txs, ym);
     CardsCharts.renderLineDaily($("#chart-daily"), points, { tooltip: $("#tip-daily") });
   }
 
@@ -258,17 +318,16 @@
     CardsCharts.renderBarMonthly($("#chart-monthly"), months);
   }
 
-  function renderCategory(txs) {
-    const ymThis = isoDate(new Date()).slice(0, 7);
-    const monthTx = txs.filter(t => t.date.startsWith(ymThis));
+  function renderCategory(txs, ym) {
+    $("#title-cat-donut").textContent = `カテゴリ別（${monthLabel(ym)}）`;
+    $("#title-cat-rank").textContent = `カテゴリ ランキング（${monthLabel(ym)}）`;
+    const monthTx = txs.filter(t => t.date.startsWith(ym));
     const slicesAll = categorySlices(monthTx);
-    // Donut: top 8, rest grouped as その他+
     const top = slicesAll.slice(0, 8);
     const rest = slicesAll.slice(8).reduce((s, x) => s + x.value, 0);
     const slices = rest > 0 ? [...top, { label: "他", value: rest }] : top;
     CardsCharts.renderDonutCategory($("#chart-category"), slices);
 
-    // Ranking list
     const total = slicesAll.reduce((s, x) => s + x.value, 0) || 1;
     const list = $("#cat-list");
     list.innerHTML = "";
@@ -282,12 +341,50 @@
       `;
       list.appendChild(li);
     }
-    if (!slicesAll.length) list.innerHTML = `<li><span class="cat-name" style="color:var(--ink-faint);">当月のデータがありません</span><span></span></li>`;
+    if (!slicesAll.length) list.innerHTML = `<li><span class="cat-name" style="color:var(--ink-faint);">この月のデータがありません</span><span></span></li>`;
+  }
+
+  function renderMonthlySummary(txs, months) {
+    const wrap = $("#month-summary");
+    if (!months.length) { wrap.innerHTML = ""; return; }
+    const rows = months.map(m => {
+      const s = statsForMonth(txs, m);
+      const isSelected = m === state.selectedMonth;
+      return `<tr class="${isSelected ? "is-selected" : ""}" data-month="${m}">
+        <td>${monthLabel(m)}</td>
+        <td class="amount">${fmt(s.total)}</td>
+        <td class="amount">${fmt(s.paypay)}</td>
+        <td class="amount">${fmt(s.saison)}</td>
+        <td class="amount">${s.count}</td>
+        <td class="amount">${fmt(s.avg)}</td>
+      </tr>`;
+    }).join("");
+    wrap.innerHTML = `
+      <table class="month-summary-table">
+        <thead><tr>
+          <th>月</th>
+          <th style="text-align:right;">合計</th>
+          <th style="text-align:right;">PayPay</th>
+          <th style="text-align:right;">セゾン</th>
+          <th style="text-align:right;">件数</th>
+          <th style="text-align:right;">平均1件</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+    wrap.querySelectorAll("tr[data-month]").forEach(tr => {
+      tr.addEventListener("click", () => {
+        state.selectedMonth = tr.dataset.month;
+        render();
+        const sel = $("#month-selector");
+        if (sel) sel.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
   }
 
   function rebindFilterControls() {
     const txs = state.data.transactions || [];
-    const months = [...new Set(txs.map(t => t.date.slice(0, 7)))].sort().reverse();
+    const months = monthsWithData(txs);
     const cats = [...new Set(txs.map(t => t.category))].sort();
 
     const ctl = $("#tx-controls");
@@ -312,8 +409,6 @@
     $("#f-cat").addEventListener("change", e => { state.filter.category = e.target.value; state.page = 1; renderTable(txs); });
     $("#f-q").addEventListener("input", e => { state.filter.q = e.target.value; state.page = 1; renderTable(txs); });
   }
-
-  function bindFilters() { /* installed after scaffold; no-op early */ }
 
   function renderTable(txs) {
     const f = state.filter;
