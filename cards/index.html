@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>カード明細トラッカー</title>
+  <meta name="description" content="PayPay カードとセゾンカードの利用明細を日々確認するダッシュボード。">
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;1,400&family=Inter:wght@300;400;500&family=Noto+Sans+JP:wght@300;400&family=Noto+Serif+JP:wght@300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="assets/cards.css">
+</head>
+<body>
+
+  <section id="unlock" class="admin gate">
+    <div class="eyebrow">Card Statements</div>
+    <h1>明細を表示</h1>
+    <form id="unlock-form">
+      <div class="field">
+        <label for="unlock-pass">パスフレーズ</label>
+        <input type="password" id="unlock-pass" autocomplete="current-password" autofocus>
+      </div>
+      <button class="btn" type="submit">復号して表示</button>
+      <div class="error" id="unlock-err"></div>
+    </form>
+    <p style="margin-top:48px; font-size:12px; color:var(--ink-faint); letter-spacing:.1em;">
+      <a href="admin.html" style="border-bottom:1px solid var(--line);">CSV を取り込む（管理者）</a>
+      &nbsp;·&nbsp;
+      <a href="../index.html" style="border-bottom:1px solid var(--line);">アルバムへ</a>
+    </p>
+  </section>
+
+  <section id="dash" class="dash hidden">
+    <div class="dash__nav">
+      <span>Card Statements</span>
+      <span>
+        <a href="admin.html">取込</a>
+        &nbsp;·&nbsp;
+        <a href="#" id="sign-out">ロックする</a>
+      </span>
+    </div>
+    <div id="dash-content"></div>
+  </section>
+
+  <script src="assets/cards-crypto.js"></script>
+  <script src="assets/cards-charts.js"></script>
+  <script src="assets/cards-view.js"></script>
+</body>
+</html>

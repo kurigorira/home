@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>取込 · カード明細トラッカー</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;1,400&family=Inter:wght@300;400;500&family=Noto+Sans+JP:wght@300;400&family=Noto+Serif+JP:wght@300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="stylesheet" href="assets/cards.css">
+</head>
+<body>
+
+  <section id="gate" class="admin gate">
+    <h1>管理者モード</h1>
+    <form id="gate-form">
+      <div class="field">
+        <label for="gate-password">パスワード</label>
+        <input type="password" id="gate-password" autocomplete="current-password" autofocus>
+      </div>
+      <button class="btn" type="submit">ロックを解除</button>
+      <div class="error" id="gate-error"></div>
+    </form>
+    <p style="margin-top:48px; font-size:12px; color:var(--ink-faint); letter-spacing:.1em;">
+      <a href="index.html" style="border-bottom:1px solid var(--line);">← ダッシュボード</a>
+    </p>
+  </section>
+
+  <section id="admin" class="admin hidden">
+    <div class="eyebrow">Card Statements / Import</div>
+    <h1>CSV を取り込む</h1>
+
+    <!-- Passphrase -->
+    <div class="passphrase-banner">
+      <div style="font-size:11px; letter-spacing:.3em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:10px;">
+        暗号化パスフレーズ
+      </div>
+      明細データは <code>data/cards.json.enc</code> に AES-GCM で暗号化されてコミットされます。
+      閲覧時にも同じパスフレーズが必要です。<strong>紛失すると復元不可</strong>です。
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label for="pp-input">パスフレーズ（8 文字以上）</label>
+        <input type="password" id="pp-input" autocomplete="new-password">
+      </div>
+      <div class="field">
+        <label for="pp-confirm">確認</label>
+        <input type="password" id="pp-confirm" autocomplete="new-password">
+      </div>
+    </div>
+    <button class="btn btn--ghost" type="button" id="pp-save">設定して既存データを取得</button>
+    <div class="status" id="pp-status"></div>
+
+    <div class="admin__section">
+      <div class="eyebrow" style="margin-bottom:20px;">GitHub Token</div>
+      <div id="pat-banner"></div>
+      <details style="margin-top:14px;">
+        <summary>PAT 発行手順</summary>
+        <ol style="margin:10px 0 0 18px; padding:0; line-height:1.9;">
+          <li><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">トークン発行ページ</a> を開く</li>
+          <li>Repository access: <code>kurigorira/home</code> のみ</li>
+          <li>Repository permissions → <strong>Contents</strong> を <strong>Read and write</strong></li>
+          <li>発行された <code>github_pat_...</code> を上記欄に貼り付け</li>
+        </ol>
+      </details>
+    </div>
+
+    <!-- Import section -->
+    <section id="import-section" class="admin__section hidden">
+      <div class="eyebrow" style="margin-bottom:20px;">CSV 取込</div>
+      <div class="dropzone" id="dropzone">
+        ここに CSV をドラッグ&ドロップ、またはクリックで選択<br>
+        <span style="font-size:12px; color:var(--ink-faint);">PayPayカード／セゾンカード対応・複数同時可</span>
+      </div>
+      <input type="file" id="file-input" accept=".csv,text/csv" multiple style="display:none">
+      <div class="status" id="parse-status"></div>
+      <div id="import-table-wrap"></div>
+
+      <details style="margin-top:14px;">
+        <summary>CSV のダウンロード方法</summary>
+        <ul style="margin:10px 0 0 18px; padding:0; line-height:1.9;">
+          <li><strong>PayPay カード</strong>：会員メニュー → ご利用明細 → CSV ダウンロード</li>
+          <li><strong>セゾンカード</strong>：Net アンサー → ご利用明細 → CSV／TSV ダウンロード</li>
+          <li>ファイル名に「paypay」または「saison」を含めると自動判定されます</li>
+        </ul>
+      </details>
+    </section>
+
+    <!-- Rules section -->
+    <section id="rules-section" class="admin__section hidden">
+      <div class="eyebrow" style="margin-bottom:20px;">店舗名ルール</div>
+      <ul class="rule-list" id="rule-list"></ul>
+      <div class="rule-add">
+        <input type="text" id="rule-add-match" placeholder="店舗名に含まれる文字（例：セブン）">
+        <select id="rule-add-cat"></select>
+        <button class="btn btn--ghost" type="button" id="rule-add-btn">ルール追加</button>
+      </div>
+      <div class="status">店舗名にこの文字列を含めば自動でカテゴリを割当てます。手動上書きした行はルール再適用の対象外。</div>
+    </section>
+
+    <!-- Commit -->
+    <section id="commit-section" class="admin__section hidden">
+      <div class="eyebrow" style="margin-bottom:20px;">GitHub にコミット</div>
+      <button class="btn" type="button" id="commit-btn">暗号化してコミット</button>
+      <div class="status" id="commit-status"></div>
+      <div class="status" style="margin-top:18px;">
+        コミット後、<a href="index.html" style="border-bottom:1px solid var(--line);">ダッシュボード</a> で確認できます。
+      </div>
+    </section>
+
+    <p style="margin-top:64px; font-size:12px; color:var(--ink-faint); letter-spacing:.1em;">
+      <a href="index.html" style="border-bottom:1px solid var(--line);">← ダッシュボードへ戻る</a>
+    </p>
+  </section>
+
+  <script src="assets/cards-crypto.js"></script>
+  <script src="assets/cards-charts.js"></script>
+  <script src="assets/cards-csv.js"></script>
+  <script src="assets/cards-admin.js"></script>
+</body>
+</html>
