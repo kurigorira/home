@@ -129,6 +129,22 @@
       .sort((a, b) => b.value - a.value);
   }
 
+  function merchantRanking(txs) {
+    const m = new Map();
+    for (const t of txs) {
+      if (t.amount <= 0) continue;
+      const key = t.merchant;
+      const cur = m.get(key) || { merchant: key, total: 0, count: 0, lastDate: "", category: t.category };
+      cur.total += t.amount;
+      cur.count += 1;
+      if (t.date > cur.lastDate) cur.lastDate = t.date;
+      m.set(key, cur);
+    }
+    return [...m.values()]
+      .map(x => ({ ...x, avg: Math.round(x.total / x.count) }))
+      .sort((a, b) => b.total - a.total);
+  }
+
   function monthsWithData(txs) {
     return [...new Set(txs.map(t => t.date.slice(0, 7)))].sort().reverse();
   }
@@ -182,6 +198,7 @@
     renderDaily(txs, state.selectedMonth);
     renderMonthly(txs);
     renderCategory(txs, state.selectedMonth);
+    renderMerchantRanking(txs, state.selectedMonth);
     renderMonthlySummary(txs, months);
     renderTable(txs);
   }
@@ -229,6 +246,14 @@
           </div>
           <ul class="cat-list" id="cat-list"></ul>
         </div>
+      </div>
+
+      <div class="chart-block">
+        <div class="chart-block__head">
+          <h2 class="chart-block__title" id="title-merchant">ショップ別ランキング</h2>
+          <div class="chart-block__legend" id="merchant-controls"></div>
+        </div>
+        <div id="merchant-ranking"></div>
       </div>
 
       <div class="chart-block">
@@ -342,6 +367,82 @@
       list.appendChild(li);
     }
     if (!slicesAll.length) list.innerHTML = `<li><span class="cat-name" style="color:var(--ink-faint);">この月のデータがありません</span><span></span></li>`;
+  }
+
+  function renderMerchantRanking(txs, ym) {
+    const scope = state.merchantScope || "month";
+    const limit = state.merchantExpanded ? Infinity : 15;
+    const scoped = scope === "all" ? txs : txs.filter(t => t.date.startsWith(ym));
+    const ranking = merchantRanking(scoped);
+
+    $("#title-merchant").textContent = scope === "all"
+      ? "ショップ別ランキング（全期間）"
+      : `ショップ別ランキング（${monthLabel(ym)}）`;
+
+    const ctlHtml = `
+      <button class="rank-toggle ${scope === "month" ? "is-active" : ""}" data-scope="month">この月</button>
+      <button class="rank-toggle ${scope === "all" ? "is-active" : ""}" data-scope="all">全期間</button>
+    `;
+    $("#merchant-controls").innerHTML = ctlHtml;
+    $("#merchant-controls").querySelectorAll(".rank-toggle").forEach(b => {
+      b.addEventListener("click", () => {
+        state.merchantScope = b.dataset.scope;
+        state.merchantExpanded = false;
+        renderMerchantRanking(state.data.transactions || [], state.selectedMonth);
+      });
+    });
+
+    const wrap = $("#merchant-ranking");
+    if (!ranking.length) {
+      wrap.innerHTML = `<div class="empty-dash" style="padding:32px 0;">この期間のデータがありません</div>`;
+      return;
+    }
+    const max = ranking[0].total;
+    const shown = ranking.slice(0, limit);
+    const rows = shown.map((r, i) => {
+      const pct = (r.total / max) * 100;
+      const lastDate = r.lastDate ? r.lastDate.slice(5).replace("-", "/") : "";
+      return `<tr>
+        <td class="rank-num">${i + 1}</td>
+        <td class="merchant">
+          <div class="merchant-name">${escapeHtml(r.merchant)}</div>
+          <div class="merchant-meta">${escapeHtml(r.category)} · 最終 ${lastDate}</div>
+          <div class="merchant-bar"><span style="width:${pct.toFixed(1)}%"></span></div>
+        </td>
+        <td class="amount">${fmt(r.total)}</td>
+        <td class="amount count">${r.count} 件</td>
+        <td class="amount avg">平均 ${fmt(r.avg)}</td>
+      </tr>`;
+    }).join("");
+
+    const moreBtn = ranking.length > limit
+      ? `<div class="rank-more"><button id="merchant-more">もっと見る（残り ${ranking.length - limit} 件）</button></div>`
+      : (state.merchantExpanded && ranking.length > 15
+        ? `<div class="rank-more"><button id="merchant-less">折りたたむ</button></div>`
+        : "");
+
+    wrap.innerHTML = `
+      <table class="merchant-table">
+        <thead><tr>
+          <th></th><th>ショップ</th>
+          <th style="text-align:right;">合計</th>
+          <th style="text-align:right;">件数</th>
+          <th style="text-align:right;">平均1件</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      ${moreBtn}
+    `;
+    const more = $("#merchant-more");
+    if (more) more.addEventListener("click", () => {
+      state.merchantExpanded = true;
+      renderMerchantRanking(state.data.transactions || [], state.selectedMonth);
+    });
+    const less = $("#merchant-less");
+    if (less) less.addEventListener("click", () => {
+      state.merchantExpanded = false;
+      renderMerchantRanking(state.data.transactions || [], state.selectedMonth);
+    });
   }
 
   function renderMonthlySummary(txs, months) {

@@ -76,6 +76,118 @@
   cursor: not-allowed;
 }
 
+/* ========== Merchant ranking ========== */
+.rank-toggle {
+  background: none;
+  border: 0;
+  padding: 4px 4px;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  cursor: pointer;
+  position: relative;
+  transition: color .2s;
+  margin-left: 18px;
+}
+.rank-toggle::after {
+  content: "";
+  position: absolute;
+  left: 4px; right: 4px; bottom: 0;
+  height: 1px;
+  background: var(--ink);
+  transform: scaleX(0);
+  transition: transform .3s ease;
+}
+.rank-toggle:hover { color: var(--ink-soft); }
+.rank-toggle.is-active { color: var(--ink); }
+.rank-toggle.is-active::after { transform: scaleX(1); }
+
+.merchant-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.merchant-table th,
+.merchant-table td {
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.merchant-table th {
+  text-align: left;
+  font-size: 10px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  font-weight: 400;
+}
+.merchant-table td.rank-num {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 18px;
+  color: var(--ink-faint);
+  width: 36px;
+  vertical-align: top;
+  padding-top: 14px;
+}
+.merchant-table tr:nth-child(-n+3) td.rank-num { color: var(--ink); }
+.merchant-table td.merchant { width: 60%; }
+.merchant-table .merchant-name {
+  font-family: var(--serif);
+  font-size: 16px;
+  color: var(--ink);
+  letter-spacing: 0.02em;
+}
+.merchant-table .merchant-meta {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--ink-faint);
+  margin-top: 2px;
+}
+.merchant-table .merchant-bar {
+  height: 3px;
+  background: var(--line);
+  position: relative;
+  margin-top: 8px;
+  max-width: 360px;
+}
+.merchant-table .merchant-bar > span {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: var(--ink-soft);
+}
+.merchant-table td.amount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  padding-top: 14px;
+}
+.merchant-table td.count,
+.merchant-table td.avg {
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+.rank-more {
+  text-align: center;
+  margin-top: 16px;
+}
+.rank-more button {
+  background: none;
+  border: 1px solid var(--line);
+  padding: 8px 22px;
+  font-size: 11px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: border-color .2s, color .2s;
+}
+.rank-more button:hover {
+  border-color: var(--ink-faint);
+  color: var(--ink);
+}
+
 /* ========== Monthly summary table ========== */
 .month-summary-table {
   width: 100%;
